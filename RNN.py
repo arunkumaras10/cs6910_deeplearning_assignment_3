@@ -27,64 +27,81 @@ class RNN:
         # create training model
 
         # input layer
-        encoder_inputs = keras.Input(shape=(None,))
+        encoder_inputs = keras.Input(shape=(None,), name='encoder_input')
         # word embedding layer
-        embeden = tf.keras.layers.Embedding(input_dim=self.n_encoder_tokens, output_dim=32)(encoder_inputs)
-        encoder = keras.layers.LSTM(self.latent_dimension, return_state=True, return_sequences=True)
-        encoder_outputs, state_h, state_c = encoder(embeden)
+        encoder = None
+        encoder_outputs = None
+        state_h = None
+        state_c = None
+        embeden = tf.keras.layers.Embedding(input_dim=self.n_encoder_tokens, output_dim=32, name='encoder_embedding')(encoder_inputs)
+        if self.cell_type is not None and self.cell_type.lower() == 'rnn':
+            encoder = keras.layers.SimpleRNN(self.latent_dimension, return_state=True, return_sequences=True, name='encoder_hidden_1')
+            encoder_outputs, state_h = encoder(embeden)
+        elif self.cell_type is not None and self.cell_type.lower() == 'gru':
+            encoder = keras.layers.GRU(self.latent_dimension, return_state=True, return_sequences=True, name='encoder_hidden_1')
+            encoder_outputs, state_h = encoder(embeden)
+        else:
+            encoder = keras.layers.LSTM(self.latent_dimension, return_state=True, return_sequences=True, name='encoder_hidden_1')
+            encoder_outputs, state_h, state_c = encoder(embeden)
+
         # 1st layer
         # number of encoder layers
         e_layer = self.n_encoder_layers
         for i in range(2, e_layer + 1):
-            encoder = keras.layers.LSTM(self.latent_dimension, return_sequences=True, return_state=True)
-            # give the output sequences as input to the next layer also the last state is set as initial state of next layer
-            encoder_outputs, state_h, state_c = encoder(encoder_outputs, initial_state=[state_h, state_c])
+            # give the output sequences as input to the next layer also the last state is set as initial state of
+            # next layer
+            layer_name = ('encoder_hidden_%d') % i
+            if self.cell_type is not None and self.cell_type.lower() == 'rnn':
+                encoder = keras.layers.SimpleRNN(self.latent_dimension, return_state=True, return_sequences=True, name=layer_name)
+                encoder_outputs, state_h = encoder(encoder_outputs, initial_state=[state_h])
+            elif self.cell_type is not None and self.cell_type.lower() == 'gru':
+                encoder = keras.layers.GRU(self.latent_dimension, return_state=True, return_sequences=True, name=layer_name)
+                encoder_outputs, state_h = encoder(encoder_outputs, initial_state=[state_h])
+            else:
+                encoder = keras.layers.LSTM(self.latent_dimension, return_state=True, return_sequences=True, name=layer_name)
+                encoder_outputs, state_h, state_c = encoder(encoder_outputs, initial_state=[state_h, state_c])
 
+        encoder_states = None
         # save the last state
-        encoder_states = [state_h, state_c]
-        decoder_inputs = keras.Input(shape=(None,))
-        embedde = tf.keras.layers.Embedding(self.n_decoder_tokens, 32)(decoder_inputs)
+        if self.cell_type is not None and (self.cell_type.lower() == 'rnn' or self.cell_type.lower() == 'gru'):
+            encoder_states = [state_h]
+        else:
+            encoder_states = [state_h, state_c]
+        decoder_inputs = keras.Input(shape=(None,), name='decoder_input')
+        embedde = tf.keras.layers.Embedding(self.n_decoder_tokens, 32, name='decoder_embedding')(decoder_inputs)
         # number of decoder layers
         d_layer = self.n_decoder_layers
+        decoder = None
         # first layer
-        decoder_lstm = keras.layers.LSTM(self.latent_dimension, return_sequences=True, return_state=True)
-        # all decoders the initial state is encoder last state of last layer
-        decoder_outputs, _, _ = decoder_lstm(embedde, initial_state=encoder_states)
+        if self.cell_type is not None and self.cell_type.lower() == 'rnn':
+            decoder = keras.layers.SimpleRNN(self.latent_dimension, return_sequences=True, return_state=True, name='decoder_hidden_1')
+            # all decoders the initial state is encoder last state of last layer
+            decoder_outputs, _ = decoder(embedde, initial_state=encoder_states)
+        elif self.cell_type is not None and self.cell_type.lower() == 'gru':
+            decoder = keras.layers.GRU(self.latent_dimension, return_sequences=True, return_state=True, name='decoder_hidden_1')
+            # all decoders the initial state is encoder last state of last layer
+            decoder_outputs, _ = decoder(embedde, initial_state=encoder_states)
+        else:
+            decoder = keras.layers.LSTM(self.latent_dimension, return_sequences=True, return_state=True, name='decoder_hidden_1')
+            # all decoders the initial state is encoder last state of last layer
+            decoder_outputs, _, _ = decoder(embedde, initial_state=encoder_states)
+
         for i in range(2, d_layer + 1):
-            decoder_lstm = keras.layers.LSTM(self.latent_dimension, return_sequences=True, return_state=True)
-            decoder_outputs, _, _ = decoder_lstm(decoder_outputs, initial_state=encoder_states)
+            layer_name = 'decoder_hidden_%d' % i
+            if self.cell_type is not None and self.cell_type.lower() == 'rnn':
+                decoder = keras.layers.SimpleRNN(self.latent_dimension, return_sequences=True, return_state=True, name=layer_name)
+                decoder_outputs, _ = decoder(decoder_outputs, initial_state=encoder_states)
+            elif self.cell_type is not None and self.cell_type.lower() == 'gru':
+                decoder = keras.layers.GRU(self.latent_dimension, return_sequences=True, return_state=True, name=layer_name)
+                decoder_outputs, _ = decoder(decoder_outputs, initial_state=encoder_states)
+            else:
+                decoder = keras.layers.LSTM(self.latent_dimension, return_sequences=True, return_state=True, name=layer_name)
+                decoder_outputs, _ = decoder(decoder_outputs, initial_state=encoder_states)
         # add a dense layer
-        decoder_dense = keras.layers.Dense(self.n_decoder_tokens, activation="softmax")
+        decoder_dense = keras.layers.Dense(self.n_decoder_tokens, activation="softmax", name='decoder_output')
         decoder_outputs = decoder_dense(decoder_outputs)
 
         self.model = keras.Model([encoder_inputs, decoder_inputs], decoder_outputs)
-
-        # create inference model
-
-        encoder_inputs = self.model.input[0]  # input_1
-        encoder_outputs, state_h_enc, state_c_enc = self.model.layers[4].output  # lstm
-        encoder_states = [state_h_enc, state_c_enc]
-        self.encoder_model = keras.Model(encoder_inputs, encoder_states)
-
-        decoder_inputs = self.model.input[1]  # input_2 #bro this should be embedding layer
-
-        embedde = self.model.layers[3](decoder_inputs)
-
-        # all decodders the initial state is encoder last state of last lay
-
-        decoder_state_input_h = keras.Input(shape=(self.latent_dimension,))
-        decoder_state_input_c = keras.Input(shape=(self.latent_dimension,))
-        decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
-        decoder_lstm = self.model.layers[5]
-        decoder_outputs, state_h_dec, state_c_dec = decoder_lstm(
-            embedde, initial_state=decoder_states_inputs
-        )
-        decoder_states = [state_h_dec, state_c_dec]
-        decoder_dense = self.model.layers[6]
-        decoder_outputs = decoder_dense(decoder_outputs)
-        self.decoder_model = keras.Model(
-            [decoder_inputs] + decoder_states_inputs, [decoder_outputs] + decoder_states
-        )
 
     def fit(self, encoder_input_data, decoder_input_data, decoder_target_data,
             val_encoder_input_data, val_decoder_input_data, val_decoder_target_data,
@@ -99,6 +116,54 @@ class RNN:
             epochs=epochs,
             validation_data=([val_encoder_input_data, val_decoder_input_data],
                              val_decoder_target_data)
+        )
+
+        # create inference model
+        encoder_inputs = self.model.input[0]  # input_1
+        if self.cell_type is not None and (self.cell_type.lower() == 'rnn' or self.cell_type.lower() == 'gru'):
+            encoder_outputs, state_h_enc = self.model.get_layer(
+                'encoder_hidden_' + str(self.n_encoder_layers)).output
+            encoder_states = [state_h_enc]
+            self.encoder_model = keras.Model(encoder_inputs, encoder_states)
+
+            decoder_inputs = self.model.input[1]  # input_2
+
+            embedde = self.model.get_layer('decoder_embedding')(decoder_inputs)
+
+            # all decoders the initial state is encoder last state of last lay
+
+            decoder_state_input_h = keras.Input(shape=(self.latent_dimension,))
+            decoder_states_inputs = [decoder_state_input_h]
+            decoder = self.model.get_layer('decoder_hidden_' + str(self.n_decoder_layers))
+            decoder_outputs, state_h_dec = decoder(
+                embedde, initial_state=decoder_states_inputs
+            )
+            decoder_states = [state_h_dec]
+        else:
+            encoder_outputs, state_h_enc, state_c_enc = self.model.get_layer(
+                'encoder_hidden_' + str(self.n_encoder_layers)).output
+            encoder_states = [state_h_enc, state_c_enc]
+            self.encoder_model = keras.Model(encoder_inputs, encoder_states)
+
+            decoder_inputs = self.model.input[1]  # input_2
+
+            embedde = self.model.get_layer('decoder_embedding')(decoder_inputs)
+
+            # all decoders the initial state is encoder last state of last lay
+
+            decoder_state_input_h = keras.Input(shape=(self.latent_dimension,))
+            decoder_state_input_c = keras.Input(shape=(self.latent_dimension,))
+            decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
+            decoder = self.model.get_layer('decoder_hidden_' + str(self.n_decoder_layers))
+            decoder_outputs, state_h_dec, state_c_dec = decoder(
+                embedde, initial_state=decoder_states_inputs
+            )
+            decoder_states = [state_h_dec, state_c_dec]
+
+        decoder_dense = self.model.get_layer('decoder_output')
+        decoder_outputs = decoder_dense(decoder_outputs)
+        self.decoder_model = keras.Model(
+            [decoder_inputs] + decoder_states_inputs, [decoder_outputs] + decoder_states
         )
 
     def decode_sequence(self, input_seq, empty_seq, max_decoder_seq_length, reverse_target_char_index):
