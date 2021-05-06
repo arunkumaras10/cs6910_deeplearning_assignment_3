@@ -7,7 +7,7 @@ from keras import backend
 class RNN:
     def __init__(self, embedding_size, n_encoder_tokens, n_decoder_tokens, n_encoder_layers,
                  n_decoder_layers, latent_dimension, cell_type,
-                 dropout=None, beam_size=1):
+                 dropout=0.0, beam_size=1):
         self.embedding_size = embedding_size
         self.n_encoder_tokens = n_encoder_tokens
         self.n_decoder_tokens = n_decoder_tokens
@@ -33,15 +33,15 @@ class RNN:
         encoder_outputs = None
         state_h = None
         state_c = None
-        embeden = tf.keras.layers.Embedding(input_dim=self.n_encoder_tokens, output_dim=32, name='encoder_embedding')(encoder_inputs)
+        embeden = tf.keras.layers.Embedding(input_dim=self.n_encoder_tokens, output_dim=self.embedding_size, name='encoder_embedding')(encoder_inputs)
         if self.cell_type is not None and self.cell_type.lower() == 'rnn':
-            encoder = keras.layers.SimpleRNN(self.latent_dimension, return_state=True, return_sequences=True, name='encoder_hidden_1')
+            encoder = keras.layers.SimpleRNN(self.latent_dimension, return_state=True, return_sequences=True, name='encoder_hidden_1', dropout=self.dropout)
             encoder_outputs, state_h = encoder(embeden)
         elif self.cell_type is not None and self.cell_type.lower() == 'gru':
-            encoder = keras.layers.GRU(self.latent_dimension, return_state=True, return_sequences=True, name='encoder_hidden_1')
+            encoder = keras.layers.GRU(self.latent_dimension, return_state=True, return_sequences=True, name='encoder_hidden_1', dropout=self.dropout)
             encoder_outputs, state_h = encoder(embeden)
         else:
-            encoder = keras.layers.LSTM(self.latent_dimension, return_state=True, return_sequences=True, name='encoder_hidden_1')
+            encoder = keras.layers.LSTM(self.latent_dimension, return_state=True, return_sequences=True, name='encoder_hidden_1', dropout=self.dropout)
             encoder_outputs, state_h, state_c = encoder(embeden)
 
         # 1st layer
@@ -52,13 +52,13 @@ class RNN:
             # next layer
             layer_name = ('encoder_hidden_%d') % i
             if self.cell_type is not None and self.cell_type.lower() == 'rnn':
-                encoder = keras.layers.SimpleRNN(self.latent_dimension, return_state=True, return_sequences=True, name=layer_name)
+                encoder = keras.layers.SimpleRNN(self.latent_dimension, return_state=True, return_sequences=True, name=layer_name, dropout=self.dropout)
                 encoder_outputs, state_h = encoder(encoder_outputs, initial_state=[state_h])
             elif self.cell_type is not None and self.cell_type.lower() == 'gru':
-                encoder = keras.layers.GRU(self.latent_dimension, return_state=True, return_sequences=True, name=layer_name)
+                encoder = keras.layers.GRU(self.latent_dimension, return_state=True, return_sequences=True, name=layer_name, dropout=self.dropout)
                 encoder_outputs, state_h = encoder(encoder_outputs, initial_state=[state_h])
             else:
-                encoder = keras.layers.LSTM(self.latent_dimension, return_state=True, return_sequences=True, name=layer_name)
+                encoder = keras.layers.LSTM(self.latent_dimension, return_state=True, return_sequences=True, name=layer_name, dropout=self.dropout)
                 encoder_outputs, state_h, state_c = encoder(encoder_outputs, initial_state=[state_h, state_c])
 
         encoder_states = None
@@ -68,35 +68,35 @@ class RNN:
         else:
             encoder_states = [state_h, state_c]
         decoder_inputs = keras.Input(shape=(None,), name='decoder_input')
-        embedde = tf.keras.layers.Embedding(self.n_decoder_tokens, 32, name='decoder_embedding')(decoder_inputs)
+        embedde = tf.keras.layers.Embedding(self.n_decoder_tokens, self.embedding_size, name='decoder_embedding')(decoder_inputs)
         # number of decoder layers
         d_layer = self.n_decoder_layers
         decoder = None
         # first layer
         if self.cell_type is not None and self.cell_type.lower() == 'rnn':
-            decoder = keras.layers.SimpleRNN(self.latent_dimension, return_sequences=True, return_state=True, name='decoder_hidden_1')
+            decoder = keras.layers.SimpleRNN(self.latent_dimension, return_sequences=True, return_state=True, name='decoder_hidden_1', dropout=self.dropout)
             # all decoders the initial state is encoder last state of last layer
             decoder_outputs, _ = decoder(embedde, initial_state=encoder_states)
         elif self.cell_type is not None and self.cell_type.lower() == 'gru':
-            decoder = keras.layers.GRU(self.latent_dimension, return_sequences=True, return_state=True, name='decoder_hidden_1')
+            decoder = keras.layers.GRU(self.latent_dimension, return_sequences=True, return_state=True, name='decoder_hidden_1', dropout=self.dropout)
             # all decoders the initial state is encoder last state of last layer
             decoder_outputs, _ = decoder(embedde, initial_state=encoder_states)
         else:
-            decoder = keras.layers.LSTM(self.latent_dimension, return_sequences=True, return_state=True, name='decoder_hidden_1')
+            decoder = keras.layers.LSTM(self.latent_dimension, return_sequences=True, return_state=True, name='decoder_hidden_1', dropout=self.dropout)
             # all decoders the initial state is encoder last state of last layer
             decoder_outputs, _, _ = decoder(embedde, initial_state=encoder_states)
 
         for i in range(2, d_layer + 1):
             layer_name = 'decoder_hidden_%d' % i
             if self.cell_type is not None and self.cell_type.lower() == 'rnn':
-                decoder = keras.layers.SimpleRNN(self.latent_dimension, return_sequences=True, return_state=True, name=layer_name)
+                decoder = keras.layers.SimpleRNN(self.latent_dimension, return_sequences=True, return_state=True, name=layer_name, dropout=self.dropout)
                 decoder_outputs, _ = decoder(decoder_outputs, initial_state=encoder_states)
             elif self.cell_type is not None and self.cell_type.lower() == 'gru':
-                decoder = keras.layers.GRU(self.latent_dimension, return_sequences=True, return_state=True, name=layer_name)
+                decoder = keras.layers.GRU(self.latent_dimension, return_sequences=True, return_state=True, name=layer_name, dropout=self.dropout)
                 decoder_outputs, _ = decoder(decoder_outputs, initial_state=encoder_states)
             else:
-                decoder = keras.layers.LSTM(self.latent_dimension, return_sequences=True, return_state=True, name=layer_name)
-                decoder_outputs, _ = decoder(decoder_outputs, initial_state=encoder_states)
+                decoder = keras.layers.LSTM(self.latent_dimension, return_sequences=True, return_state=True, name=layer_name, dropout=self.dropout)
+                decoder_outputs, _, _ = decoder(decoder_outputs, initial_state=encoder_states)
         # add a dense layer
         decoder_dense = keras.layers.Dense(self.n_decoder_tokens, activation="softmax", name='decoder_output')
         decoder_outputs = decoder_dense(decoder_outputs)
@@ -178,9 +178,14 @@ class RNN:
         stop_condition = False
         decoded_sentence = ""
         while not stop_condition:
-            output_tokens, h, c = self.decoder_model.predict([target_seq] + states_value)
-
-            # print(output_tokens)
+            if self.cell_type is not None and (self.cell_type.lower() == 'rnn' or self.cell_type.lower() == 'gru'):
+                output_tokens, h = self.decoder_model.predict([target_seq] + [states_value])
+                # Update states
+                states_value = h
+            else:
+                output_tokens, h, c = self.decoder_model.predict([target_seq] + states_value)
+                # Update states
+                states_value = [h, c]
 
             # Sample a token
             sampled_token_index = np.argmax(output_tokens[0, -1, :])
@@ -195,8 +200,7 @@ class RNN:
             # Update the target sequence (of length 1).
             target_seq = np.zeros((1, 1))
             target_seq[0, 0] = sampled_token_index
-            # Update states
-            states_value = [h, c]
+
         return decoded_sentence
     
     def summary(self):
