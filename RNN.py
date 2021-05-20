@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
@@ -269,3 +270,84 @@ class RNN:
                 print('Prediction ', decoded_sentence.strip(), ',Ground Truth ', val_target_texts[seq_index].strip())
 
         return n_correct * 100.0 / n_total
+
+    def beam_search(self, input_seq, beam_size=1):
+        sequences = [([self.target_token_index["\t"]], 0.0)]
+        # Encode the input as state vectors.
+        states_value = [[self.encoder_model.predict(input_seq)]*self.n_decoder_layers]
+
+        stop_condition = False
+        t = 0
+        while not stop_condition:
+            all_seq = list()
+            char_sequences = []
+            for seq, score in sequences:
+                char_seq = ''
+                for index in seq:
+                    char_seq += self.reverse_target_char_index[index]
+                char_sequences.append((char_seq, score))
+            #print('at time ', t, char_sequences)
+            t += 1
+            for i in range(len(sequences)):
+                seq, score = sequences[i]
+                if seq[-1] == self.target_token_index["\n"] or seq[-1] == self.target_token_index[" "]:
+                    all_seq.append((seq, score))
+                    continue
+                target_seq = np.zeros((1, 1))
+                target_seq[0, 0] = seq[-1]
+                # print('target seq', seq[-1], self.reverse_target_char_index[seq[-1]])
+                if self.cell_type is not None and (self.cell_type.lower() == 'rnn' or self.cell_type.lower() == 'gru'):
+                    temp = self.decoder_model.predict([target_seq] + [states_value[i]])
+                    output_tokens, temp_states = temp[0], temp[1:]
+                else:
+                    temp = self.decoder_model.predict([target_seq] + states_value[i] )
+                    output_tokens, temp_states = temp[0], temp[1:]
+
+                if t == 1:
+                    states_value = [temp_states] * beam_size
+                else:
+                    states_value[i] = temp_states
+
+                for j in range(len(output_tokens[0, -1, :])):
+                    candidate = (seq + [j], score - math.log(output_tokens[0, -1, j]))
+                    all_seq.append(candidate)
+
+                # Exit condition: either hit max length
+                # or find stop character.
+                sampled_token_index = np.argmax(output_tokens[0, -1, :])
+                sampled_char = self.reverse_target_char_index[sampled_token_index]
+                # print('prob', output_tokens[0, -1, :])
+                # print('sampledchar ', sampled_char)
+
+            sorted_by_prob = sorted(all_seq, key=lambda tup: tup[1])
+
+            # print all possible sequences
+            char_sequences = []
+            for seq, score in sequences:
+                char_seq = ''
+                for index in seq:
+                    char_seq += self.reverse_target_char_index[index]
+                char_sequences.append((char_seq, score))
+            # print('Printing all sequences')
+            # print(char_sequences)
+
+            # select the top k sequences
+            sequences = sorted_by_prob[:beam_size]
+            if t > self.max_decoder_seq_length:
+                stop_condition = True
+            # if every sequence has predicted \n we should stop
+            all_seq_ended = True
+            for seq, _ in sequences:
+                if seq[-1] != self.target_token_index["\n"]:
+                    all_seq_ended = False
+                    break
+            if all_seq_ended:
+                stop_condition = True
+        # create character out of indexes
+        char_sequences = []
+        for seq, score in sequences:
+            char_seq = ''
+            for index in seq:
+                char_seq += self.reverse_target_char_index[index]
+            char_sequences.append((char_seq, score))
+        return char_sequences
