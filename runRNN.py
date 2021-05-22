@@ -2,62 +2,22 @@ import random
 import numpy as np
 import RNN
 
-
-def accuracy(val_encoder_input_data, target_token_index, max_decoder_seq_length, reverse_target_char_index):
-    n_correct = 0
-    n_total = 0
-    for seq_index in range(len(val_encoder_input_data[0:200])):
-        # Take one sequence (part of the training set)
-        # for trying out decoding.
-        input_seq = val_encoder_input_data[seq_index: seq_index + 1]
-        # Generate empty target sequence of length 1.
-        empty_seq = np.zeros((1, 1))
-        # Populate the first character of target sequence with the start character.
-        empty_seq[0, 0] = target_token_index["\t"]
-        decoded_sentence = model.decode_sequence(input_seq, empty_seq, max_decoder_seq_length,
-                                                 reverse_target_char_index)
-
-        if decoded_sentence.strip() == val_target_texts[seq_index].strip():
-            n_correct += 1
-
-        n_total += 1
-
-    return n_correct * 100.0 / n_total
-
-
-# %%
-
 batch_size = 64  # Batch size for training.
-epochs = 15  # Number of epochs to train for.
+epochs = 25  # Number of epochs to train for.
 latent_dim = 256  # Latent dimensionality of the encoding space. #hidden states hyperparameter
-# num_samples = 25000  # Number of samples to train on.
 # Path to the data txt file on disk.
-train_hindi = "dakshina_dataset_v1.0/hi/lexicons/hi.translit.sampled.train.tsv"
-val_hindi = "dakshina_dataset_v1.0/hi/lexicons/hi.translit.sampled.dev.tsv"
-train_marathi = "dakshina_dataset_v1.0/mr/lexicons/mr.translit.sampled.train.tsv"
-val_marathi = "dakshina_dataset_v1.0/mr/lexicons/mr.translit.sampled.dev.tsv"
+train_data = "dakshina_dataset_v1.0/ta/lexicons/ta.translit.sampled.train.tsv"
+val_data = "dakshina_dataset_v1.0/ta/lexicons/ta.translit.sampled.dev.tsv"
 # open and save the files to lists
-# using hindi and marathi since it is asked devanagiri and both are devanagiri
-with open(train_hindi, "r", encoding="utf-8") as f:
-    train_hindi_lines = f.read().split("\n")
-with open(val_hindi, "r", encoding="utf-8") as f:
-    val_hindi_lines = f.read().split("\n")
-with open(train_marathi, "r", encoding="utf-8") as f:
-    train_marathi_lines = f.read().split("\n")
-with open(val_marathi, "r", encoding="utf-8") as f:
-    val_marathi_lines = f.read().split("\n")
+with open(train_data, "r", encoding="utf-8") as f:
+    train_lines = f.read().split("\n")
+with open(val_data, "r", encoding="utf-8") as f:
+    val_lines = f.read().split("\n")
 # popping the last element of all the lists since it is empty character
-train_hindi_lines.pop()
-train_marathi_lines.pop()
-val_hindi_lines.pop()
-val_marathi_lines.pop()
-# combine the train of hindi and marathi
-# uncomment to include marathi also
-train_lines = train_hindi_lines  # +train_marathi_lines
-# combine the validation of hindi and marathi
-val_lines = val_hindi_lines  # +val_marathi_lines
+train_lines.pop()
+val_lines.pop()
 random.shuffle(train_lines)
-print(train_lines[1:2])
+print(train_lines[0:2])
 
 # embedding pre processing
 input_texts = []
@@ -179,19 +139,14 @@ reverse_input_char_index = dict((i, char) for char, i in input_token_index.items
 reverse_target_char_index = dict((i, char) for char, i in target_token_index.items())
 
 # create RNN model
-model = RNN.RNN(embedding_size=32, n_encoder_tokens=num_encoder_tokens, n_decoder_tokens=num_decoder_tokens,
-                n_encoder_layers=1, n_decoder_layers=1, latent_dimension=latent_dim,
-                cell_type='LSTM', target_token_index=target_token_index, max_decoder_seq_length=max_decoder_seq_length,
-                reverse_target_char_index=reverse_target_char_index)
+model = RNN.RNN(embedding_size=256, n_encoder_tokens=num_encoder_tokens, n_decoder_tokens=num_decoder_tokens,
+                n_encoder_layers=2, n_decoder_layers=3, latent_dimension=latent_dim,
+                cell_type='lstm', target_token_index=target_token_index, max_decoder_seq_length=max_decoder_seq_length,
+                reverse_target_char_index=reverse_target_char_index, dropout=0.2)
 model.fit(encoder_input_data, decoder_input_data, decoder_target_data,
-          batch_size, epochs
+          batch_size, epochs=epochs
           )
-subset = 200
+subset = 100
 val_accuracy = model.accuracy(val_encoder_input_data[0:subset], val_target_texts[0:subset]) if subset>0 \
     else model.accuracy(val_encoder_input_data, val_target_texts)
 print('Validation accuracy: ', val_accuracy)
-# model.summary()
-
-# %%
-# val_accuracy = accuracy(val_encoder_input_data, target_token_index, max_decoder_seq_length, reverse_target_char_index)
-# print('Validation accuracy: ', val_accuracy)
