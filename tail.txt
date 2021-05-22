@@ -1,0 +1,92 @@
+$(document).ready(function() {
+                // print target text
+                //$('#connectivity').html('<div id="target" style="display:inline"> </div> <div id="source" style="display:inline"> </div>');
+                for(k=0;k<targetText.length;k++) {
+                    $('#tab').append(`<tr>
+                        <td><div id="target_readable_${k}" style="display:inline"> </div></td>
+                        <td><div id="target_${k}" style="display:inline"> </div></td>
+                        <td><div id="source_${k}" style="display:inline"> </div></td>
+                    </tr>`)
+                    
+                    target_string = ''
+                    for(i=0;i<targetText[k].length;i++) {
+                        if(targetText[k][i] == '\t' || targetText[k][i] == '\n') {
+                            continue
+                        }
+                        target_string += targetText[k][i]
+                    }
+                    $(`#target_readable_${k}`).text(target_string)
+                    html = ''
+                    for(i=0;i<targetText[k].length;i++) {
+                        if(targetText[k][i] == '\t') {
+                            html += `<span id="t_${k}_${i}" style="display: inline-block;">` + '[start]' + '</span> ';
+                        } else if (targetText[k][i] == '\n') {
+                            html += `<span id="t_${k}_${i}" style="display: inline-block;">` + '[end]' + '</span> ';
+                        } else {
+                            html += `<span id="t_${k}_${i}" style="display: inline-block;">` + targetText[k][i] + '</span> ';
+                        }
+                    }
+                    $(`#target_${k}`).html(html);
+
+                    //print source text
+                    html = ''
+                    for(i=0;i<sourceText[k].length;i++) {
+                        if(sourceText[k][i] == '\t') {
+                            html += `<span id="s_${k}_${i}" style="display: inline-block;">` + '[start]' + '</span> ';
+                        } else if (sourceText[k][i] == '\n') {
+                            html += `<span id="s_${k}_${i}" style="display: inline-block;">` + '[end]' + '</span> ';
+                        } else {
+                            html += `<span id="s_${k}_${i}" style="display: inline-block;">` + sourceText[k][i] + '</span> ';
+                        }
+                    }
+                    $(`#source_${k}`).html(html);
+
+                    // add hover effect for target text
+                    for(i=0;i<targetText[k].length;i++) {
+                        $(`#t_${k}_${i}`).hover(function() {
+                            $(this).css('background-color', '#fff200')
+                            id = $(this).attr('id')
+                            index = id.split("_")[2]
+                            parid = $(this).parent().attr('id')
+                            wordIndex = parid.split("_")[1]
+                            for(j=0;j<weight[wordIndex][index].length;j++) {
+                                $(`#s_${wordIndex}_${j}`).css('background-color', `rgba(0,255,0,${weight[wordIndex][index][j]})`)
+                            }
+                        }, function() {
+                            $(this).css('background-color', '#ffffff')
+                            //reset all background color to white for all source text
+                            parid = $(this).parent().attr('id')
+                            wordIndex = parid.split("_")[1]
+                            for(j=0;j<weight[0][0].length;j++) {
+                                $(`#s_${wordIndex}_${j}`).css('background-color', '#ffffff')
+                            }
+                        });
+                    }
+                }
+            });
+        </script>
+        <style>
+            table, th, td {
+              border: 1px solid black;
+              border-collapse: collapse;
+            }
+            th {
+                text-align: left;
+            }
+            th,td {
+                padding: 5px;
+            }
+        </style>
+    </head>
+    
+    <body>
+        <table id='tab'>
+            <tr>
+                <th>Target text in readable format</th>
+                <th>Target text</th>
+                <th>Source text</th>
+            </tr>
+            
+        </table>
+    </body>
+</html>
