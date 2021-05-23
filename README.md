@@ -13,7 +13,7 @@ This python notebook configures the best model from the sweep, trains the model,
 # plotPredictions.py
 This python script generates a html page with a table of test set predictions. On running the script, it generates a file called prediction_grid.html.
 
-# attention_sweep.ipynb
+# attentionModel.ipynb
 This python notebook contains code to configure and run wandb sweeps for attention models.
 
 # connectivity_visualization.html
